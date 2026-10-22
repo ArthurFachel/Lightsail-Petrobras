@@ -64,13 +64,13 @@ que le a configuracao na hora.
 No notebook `hermes_benchmark.ipynb`:
 
 ```python
-CSV_PATH = "benchmark_questions/benchmark_chatbot_geologia_v2.csv"
-CSV_FALLBACK_URL = None
-NOVA_SESSAO_POR_PERGUNTA = True
+BATERIA = "geologia_v2"
+RODADA = "sem_base"
+OBSERVACAO = "GeoDB desligada"
 ```
 
-Rode e guarde o CSV gerado como, por exemplo,
-`resultados_benchmark/sem_base_<data>.csv`.
+O resultado sai em `resultados_benchmark/geologia_v2_sem_base_<data>.csv`, com
+um `.meta.json` ao lado (modelo, data, hash do CSV de perguntas, commit).
 
 ### Rodada B — com a base
 
@@ -79,15 +79,19 @@ hermes config set mcp_servers.geodb.enabled true
 hermes mcp test geodb          # deve conectar e listar as ferramentas
 ```
 
-Mesma bateria, mesmo dia, mesmo modelo. Guarde como `com_base_<data>.csv`.
+Mesma bateria, mesmo dia, mesmo modelo, agora com `RODADA = "com_base"`.
 
 ### Corrigir e comparar
+
+O notebook ja corrige a rodada que acabou de rodar (secao 7) e compara com
+outra se voce apontar `RODADA_A` para o CSV da rodada sem base (secao 8). Ele
+usa as funcoes deste script, entao os numeros batem com a linha de comando:
 
 ```bash
 cd ~/Lightsail-Petrobras
 python benchmark_questions/avaliar_benchmark.py \
-    resultados_benchmark/sem_base_<data>.csv \
-    resultados_benchmark/com_base_<data>.csv \
+    resultados_benchmark/geologia_v2_sem_base_<data>.csv \
+    resultados_benchmark/geologia_v2_com_base_<data>.csv \
     --rotulos "sem GeoDB" "com GeoDB"
 ```
 

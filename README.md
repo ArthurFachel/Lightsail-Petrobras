@@ -313,20 +313,23 @@ máquina de destino: não faz sentido instalá-las em estação de desenvolvimen
 
 ## Benchmark
 
-`hermes_benchmark.ipynb` roda uma bateria de perguntas contra a API e salva as
-respostas em `resultados_benchmark/` (CSV + JSON) para conferência contra o
-gabarito.
+`hermes_benchmark.ipynb` roda uma bateria de perguntas contra a API, grava
+cada resposta em `resultados_benchmark/` assim que ela volta (dá para retomar
+uma rodada que caiu), corrige o v2 automaticamente, gera a planilha de
+leitura humana e compara duas rodadas (A/B com e sem GeoDB).
 
-Para usar, ajuste no notebook:
+Rode da raiz do repositório (`pip install pandas requests tqdm` no cliente) e
+ajuste só a primeira célula de configuração:
 
 ```python
-BASE_URL = "http://SEU_IP:8000"
-CSV_PATH = "benchmark_questions/benchmark_chatbot_geologia.csv"
-NOVA_SESSAO_POR_PERGUNTA = True
+BATERIA = "geologia_v2"   # ou "geologia_v1", "seguranca"
+RODADA = "com_base"       # vai no nome do arquivo de saída
+LIMITE = None             # 3 para um teste rápido
 ```
 
-A chave é pedida via `getpass`, não fica salva no notebook. Use sempre uma
-sessão nova por pergunta, senão o contexto de uma contamina a seguinte.
+A URL vem de `HERMES_URL` (ou edite `BASE_URL`) e a chave de `HERMES_API_KEY`
+ou do `getpass`; ela nunca fica salva no notebook. Cada pergunta abre uma
+sessão nova, senão o contexto de uma contamina a seguinte.
 
 Conjuntos disponíveis:
 

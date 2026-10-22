@@ -146,9 +146,11 @@ def avaliar_item(item: dict, resposta: str, erro: str) -> dict:
 
 def ler_csv(caminho: str):
     with open(caminho, encoding="utf-8-sig", newline="") as fh:
-        amostra = fh.read(4096)
+        # Decide o separador pelo cabecalho: as respostas do agente tem muitas
+        # virgulas e, numa amostra maior, fariam um CSV com ";" parecer ",".
+        cabecalho = fh.readline()
         fh.seek(0)
-        sep = ";" if amostra.count(";") >= amostra.count(",") else ","
+        sep = ";" if cabecalho.count(";") >= cabecalho.count(",") else ","
         linhas = list(csv.DictReader(fh, delimiter=sep))
     if not linhas:
         sys.exit(f"CSV vazio: {caminho}")
