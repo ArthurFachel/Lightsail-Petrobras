@@ -45,7 +45,9 @@ cd "$INSTALL_DIR"
 echo "=========================================="
 echo " [3/13] Criando e ativando o venv"
 echo "=========================================="
-python3 -m venv venv
+# --clear: recria do zero. Um venv copiado de outra máquina/caminho tem
+# shebangs apontando pro python de lá e o pip falha com "required file not found".
+python3 -m venv --clear venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
