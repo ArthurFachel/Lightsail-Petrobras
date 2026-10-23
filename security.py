@@ -72,7 +72,8 @@ _WINDOWS_PATH_RE = re.compile(
     r"(?:[^\\\r\n<>:\"|?*]+\\)*[^\\\r\n<>:\"|?*]*"
 )
 _POSIX_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9_:/])(?:~|/)"
+    # "~" seguido de dígito é "aproximadamente" (~113,0 Ma, COT ~1%), não home.
+    r"(?<![A-Za-z0-9_:/])(?:~(?!\d)|/)"
     r"[A-Za-z0-9._@+~-]+"
     r"(?:/[A-Za-z0-9._@+~-]+)*/?"
 )

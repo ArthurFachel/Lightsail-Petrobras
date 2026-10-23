@@ -34,6 +34,12 @@ class SanitizeTextTests(unittest.TestCase):
         self.assertIn("https://doi.org/10.1000/exemplo", result)
         self.assertIn("Aptiano/Albiano", result)
 
+    def test_tilde_as_approximation_is_not_a_path(self):
+        text = "Aptiano de ~121,4 a ~113,0 Ma; COT ~1%; IH (>~600); ~21.600 km²."
+
+        self.assertEqual(sanitize_text(text), text)
+        self.assertNotIn("~ubuntu", sanitize_text("veja ~ubuntu/fontes/a.md"))
+
     def test_redacts_environment_variables_without_hiding_geology(self):
         text = (
             "HOME=/home/ubuntu\n"

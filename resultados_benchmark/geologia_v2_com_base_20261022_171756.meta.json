@@ -1,0 +1,20 @@
+{
+  "bateria": "geologia_v2",
+  "rodada": "com_base",
+  "arquivo_perguntas": "benchmark_questions/benchmark_chatbot_geologia_v2.csv",
+  "sha256_perguntas": "86b88df5e51f92e0",
+  "itens": 78,
+  "modelo": "deepseek.v3.2",
+  "observacao": "",
+  "api": "http://98.81.119.110:8000",
+  "health": {
+    "status": "ok",
+    "hermes_cli": "ok",
+    "sessoes_ativas": 80,
+    "traces_count": 79
+  },
+  "commit_local": "924e111f",
+  "nova_sessao_por_pergunta": true,
+  "inicio": "2026-10-22T17:17:56",
+  "fim": "2026-10-22T17:42:54"
+}

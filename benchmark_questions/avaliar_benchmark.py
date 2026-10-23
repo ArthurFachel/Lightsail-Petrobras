@@ -57,6 +57,10 @@ def normalizar(texto: str) -> str:
     t = unicodedata.normalize("NFD", texto)
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
     t = t.lower()
+    # hifens e espacos tipograficos (U+2010-2015, U+2212, NBSP) viram ASCII:
+    # alguns modelos escrevem "araripe‑2026.10‑r1" com hifen nao separavel.
+    t = re.sub(r"[\u2010-\u2015\u2212]", "-", t)
+    t = re.sub(r"[\u00a0\u202f]", " ", t)
     t = re.sub(r"(?<=\d)[.\s](?=\d{3}\b)", "", t)   # 1.498 -> 1498
     t = re.sub(r"(?<=\d),(?=\d)", ".", t)            # 17,2  -> 17.2
     t = re.sub(r"\s+", " ", t)
