@@ -24,7 +24,7 @@ dono do dado. Essa separação é o ponto do desenho, não um detalhe.
 ```bash
 cd ~/Hermes-v2/geodb
 ./.venv/bin/python seed.py                  # recria geo.db do zero
-./.venv/bin/python -m pytest tests/ -q      # 22 testes
+./.venv/bin/python -m pytest tests/ -q
 
 systemctl --user status geodb
 systemctl --user restart geodb
@@ -49,6 +49,15 @@ dado é confiável. Se o documento não traz o valor, a linha não entra.
 Fluxo: adicionar a referência em `REFERENCIAS`, adicionar a linha na lista
 correspondente, rodar `seed.py`, rodar os testes. O teste
 `test_toda_formacao_tem_fonte` pega linha órfã.
+
+Nova bacia real: dict com as chaves de `ARARIPE` em `seed.py`, somado a
+`CARGAS_PADRAO`. Nome de formação/grupo só é único dentro da bacia; consultas
+aceitam `bacia` opcional e devolvem `{"ambiguo": true}` quando um nome existe em
+duas bacias. Bacia inexistente no filtro volta vazio, nunca "todas".
+
+A Bacia de Maltá (`demo_malta.py`) é FICTÍCIA: canário de demo, entra só com
+`seed.py --demo` / `GEODB_DEMO=1`, versão com sufixo `+demo-malta`. É a única
+exceção à regra de não inventar, e por isso não mora no `seed.py`.
 
 A tabela `controversias` é deliberada. Quando dois trabalhos divergem, codifique
 a divergência como dado em vez de esperar que o RAG ache os dois lados. Ex.:

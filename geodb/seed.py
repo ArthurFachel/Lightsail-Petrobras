@@ -9,6 +9,7 @@ bibliografica citada no proprio texto. Ao estender, mantenha ref_id preenchido.
 Uso:
     python seed.py                 # cria ./geo.db (recria se existir)
     python seed.py --db /caminho/geo.db
+    python seed.py --demo          # inclui a Bacia de Malta (ficticia, ver demo_malta.py)
 """
 
 from __future__ import annotations
@@ -297,41 +298,34 @@ CONTROVERSIAS = [
 ]
 
 
-def construir(db_path: Path) -> sqlite3.Connection:
-    if db_path.exists():
-        db_path.unlink()
-    conn = sqlite3.connect(db_path)
-    conn.executescript((AQUI / "schema.sql").read_text(encoding="utf-8"))
+# Carga de uma bacia. Para adicionar outra bacia, monte um dict com as mesmas
+# chaves (referencias opcionais, somadas as globais) e passe em `cargas`.
+ARARIPE = dict(
+    bacia=BACIA,
+    sequencias=SEQUENCIAS,
+    grupos=GRUPOS,
+    formacoes=FORMACOES,
+    geoquimica=GEOQUIMICA,
+    fosseis=FOSSEIS,
+    pocos=POCOS,
+    controversias=CONTROVERSIAS,
+)
 
-    from datetime import datetime, timezone
+CARGAS_PADRAO = [ARARIPE]
 
-    conn.executemany(
-        "INSERT INTO metadados (chave, valor) VALUES (?,?)",
-        [
-            ("versao_base", VERSAO_BASE),
-            ("gerada_em", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
-            ("cobertura", "Bacia do Araripe"),
-        ],
-    )
 
-    refs: dict[str, int] = {}
-    for chave, autores, ano, titulo, veiculo in REFERENCIAS:
-        cur = conn.execute(
-            "INSERT INTO referencias (chave, autores, ano, titulo, veiculo) VALUES (?,?,?,?,?)",
-            (chave, autores, ano, titulo, veiculo),
-        )
-        refs[chave] = cur.lastrowid
-
+def _inserir_bacia(conn: sqlite3.Connection, carga: dict, refs: dict[str, int]) -> None:
+    b = carga["bacia"]
     cur = conn.execute(
         "INSERT INTO bacias (nome, area_km2, area_nota, orientacao, provincia, dominio, contexto, ref_id)"
         " VALUES (?,?,?,?,?,?,?,?)",
-        (BACIA["nome"], BACIA["area_km2"], BACIA["area_nota"], BACIA["orientacao"],
-         BACIA["provincia"], BACIA["dominio"], BACIA["contexto"], refs[BACIA["ref"]]),
+        (b["nome"], b["area_km2"], b["area_nota"], b["orientacao"],
+         b["provincia"], b["dominio"], b["contexto"], refs[b["ref"]]),
     )
     bacia_id = cur.lastrowid
 
     seqs: dict[str, int] = {}
-    for nome, ordem, idade, desc, ref in SEQUENCIAS:
+    for nome, ordem, idade, desc, ref in carga.get("sequencias", []):
         cur = conn.execute(
             "INSERT INTO sequencias (bacia_id, nome, ordem, idade, descricao, ref_id) VALUES (?,?,?,?,?,?)",
             (bacia_id, nome, ordem, idade, desc, refs[ref]),
@@ -339,16 +333,21 @@ def construir(db_path: Path) -> sqlite3.Connection:
         seqs[nome] = cur.lastrowid
 
     grupos: dict[str, int] = {}
-    for nome, supergrupo, ref in GRUPOS:
+    for nome, supergrupo, ref in carga.get("grupos", []):
         cur = conn.execute(
             "INSERT INTO grupos (bacia_id, nome, supergrupo, ref_id) VALUES (?,?,?,?)",
             (bacia_id, nome, supergrupo, refs[ref]),
         )
         grupos[nome] = cur.lastrowid
 
+    # Nomes de formacao sao unicos so dentro da bacia: o dicionario e local.
     forms: dict[str, int] = {}
     for (nome, ordem, grupo, seq, idade, litologia, esp, esp_nota, ambiente,
-         fossilifera, obs, ref) in FORMACOES:
+         fossilifera, obs, ref) in carga.get("formacoes", []):
+        if grupo and grupo not in grupos:
+            raise ValueError(f"{b['nome']}: formacao {nome} cita grupo inexistente {grupo!r}")
+        if seq and seq not in seqs:
+            raise ValueError(f"{b['nome']}: formacao {nome} cita sequencia inexistente {seq!r}")
         cur = conn.execute(
             "INSERT INTO formacoes (bacia_id, grupo_id, sequencia_id, nome, ordem, idade,"
             " litologia, espessura_m, espessura_nota, ambiente, fossilifera, observacoes, ref_id)"
@@ -359,7 +358,7 @@ def construir(db_path: Path) -> sqlite3.Connection:
         forms[nome] = cur.lastrowid
 
     for (form, litotipo, cot_min, cot_max, cot_nota, querogenio, maturidade,
-         metodo, ambiente_mo, ref) in GEOQUIMICA:
+         metodo, ambiente_mo, ref) in carga.get("geoquimica", []):
         conn.execute(
             "INSERT INTO geoquimica (formacao_id, litotipo, cot_min, cot_max, cot_nota,"
             " tipo_querogenio, maturidade, metodo, ambiente_mo, ref_id)"
@@ -368,25 +367,60 @@ def construir(db_path: Path) -> sqlite3.Connection:
              metodo, ambiente_mo, refs[ref]),
         )
 
-    for form, grupo_bio, detalhe, ref in FOSSEIS:
+    for form, grupo_bio, detalhe, ref in carga.get("fosseis", []):
         conn.execute(
             "INSERT INTO fosseis (formacao_id, grupo_bio, detalhe, ref_id) VALUES (?,?,?,?)",
             (forms[form], grupo_bio, detalhe, refs[ref]),
         )
 
-    for nome, sub_bacia, prof, obs, ref in POCOS:
+    for nome, sub_bacia, prof, obs, ref in carga.get("pocos", []):
         conn.execute(
             "INSERT INTO pocos (bacia_id, nome, sub_bacia, prof_embasamento_m, observacoes, ref_id)"
             " VALUES (?,?,?,?,?,?)",
             (bacia_id, nome, sub_bacia, prof, obs, refs[ref]),
         )
 
-    for tema, pos_a, ref_a, pos_b, ref_b, situacao in CONTROVERSIAS:
+    for tema, pos_a, ref_a, pos_b, ref_b, situacao in carga.get("controversias", []):
         conn.execute(
             "INSERT INTO controversias (bacia_id, tema, posicao_a, ref_a_id, posicao_b, ref_b_id, situacao)"
             " VALUES (?,?,?,?,?,?,?)",
             (bacia_id, tema, pos_a, refs[ref_a], pos_b, refs[ref_b], situacao),
         )
+
+
+def construir(db_path: Path, cargas: list[dict] | None = None,
+              versao: str | None = None) -> sqlite3.Connection:
+    """Recria a base com as bacias de `cargas` (padrao: so as reais)."""
+    cargas = CARGAS_PADRAO if cargas is None else cargas
+    if db_path.exists():
+        db_path.unlink()
+    conn = sqlite3.connect(db_path)
+    conn.executescript((AQUI / "schema.sql").read_text(encoding="utf-8"))
+
+    from datetime import datetime, timezone
+
+    conn.executemany(
+        "INSERT INTO metadados (chave, valor) VALUES (?,?)",
+        [
+            ("versao_base", versao or VERSAO_BASE),
+            ("gerada_em", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
+            ("cobertura", ", ".join(c["bacia"]["nome"] for c in cargas)),
+        ],
+    )
+
+    refs: dict[str, int] = {}
+    todas = list(REFERENCIAS) + [r for c in cargas for r in c.get("referencias", [])]
+    for chave, autores, ano, titulo, veiculo in todas:
+        if chave in refs:
+            continue
+        cur = conn.execute(
+            "INSERT INTO referencias (chave, autores, ano, titulo, veiculo) VALUES (?,?,?,?,?)",
+            (chave, autores, ano, titulo, veiculo),
+        )
+        refs[chave] = cur.lastrowid
+
+    for carga in cargas:
+        _inserir_bacia(conn, carga, refs)
 
     conn.commit()
     return conn
@@ -395,10 +429,19 @@ def construir(db_path: Path) -> sqlite3.Connection:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Popula a base GeoDB.")
     ap.add_argument("--db", default=str(AQUI / "geo.db"), help="caminho do arquivo SQLite")
+    ap.add_argument("--demo", action="store_true",
+                    help="inclui a Bacia de Malta, FICTICIA, usada para provar que o agente consulta a base")
     args = ap.parse_args()
 
     db_path = Path(args.db)
-    conn = construir(db_path)
+    if args.demo:
+        import demo_malta
+
+        conn = construir(db_path, CARGAS_PADRAO + [demo_malta.CARGA],
+                         versao=f"{VERSAO_BASE}+{demo_malta.SUFIXO_VERSAO}")
+        print("ATENCAO: base com a Bacia de Malta, ficticia. Nao use fora de demonstracao.")
+    else:
+        conn = construir(db_path)
     tabelas = ["referencias", "bacias", "sequencias", "grupos", "formacoes",
                "geoquimica", "fosseis", "pocos", "controversias"]
     print(f"Base criada em {db_path}")

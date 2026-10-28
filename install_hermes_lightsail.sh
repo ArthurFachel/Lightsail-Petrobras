@@ -25,6 +25,38 @@ REPO_URL="https://github.com/ArthurFachel/Lightsail-Petrobras"
 INSTALL_DIR="$HOME/Lightsail-Petrobras"
 BEDROCK_MODEL="deepseek.v3.2"   # ID do DeepSeek V3.2 no AWS Bedrock
 
+# ============================================================
+# DEMO: BACIA DE MALTÁ (FICTÍCIA)
+# ============================================================
+# A Maltá não existe. Nenhum documento nem modelo sabe nada dela, então se o
+# agente responder a área ou o COT dela, a resposta veio da GeoDB. Serve para
+# provar na demonstração que a ferramenta é consultada. Nunca em produção.
+#
+# Pergunta aqui, no começo, para não travar a instalação no meio. Pule a
+# pergunta com GEODB_DEMO=1 (inclui) ou GEODB_DEMO=0 (não inclui). Lê de
+# /dev/tty para funcionar também com `curl ... | bash`.
+if [ -z "${GEODB_DEMO:-}" ]; then
+    GEODB_DEMO=0
+    if [ -n "${GEODB_REMOTE_URL:-}" ]; then
+        : # base remota: o dado é de outro dono, não há o que semear aqui
+    elif ( : </dev/tty ) 2>/dev/null; then
+        echo ""
+        printf '%s' "Adicionar a Bacia de Maltá (FICTÍCIA, só para demo) na GeoDB? [s/N] " >/dev/tty
+        GEODB_RESPOSTA=""
+        read -r GEODB_RESPOSTA </dev/tty || true
+        case "$GEODB_RESPOSTA" in
+            [sSyY]*) GEODB_DEMO=1 ;;
+        esac
+    else
+        echo "-- Sem terminal interativo: GeoDB sem a demo Maltá (GEODB_DEMO=1 inclui)."
+    fi
+fi
+if [ "$GEODB_DEMO" = "1" ]; then
+    echo "-- Demo Maltá: SERÁ incluída na GeoDB."
+else
+    echo "-- Demo Maltá: não incluída."
+fi
+
 echo "=========================================="
 echo " [1/13] sudo apt update + dependências"
 echo "=========================================="
@@ -285,6 +317,9 @@ echo "=========================================="
 # NÃO rode este bloco: defina GEODB_REMOTE_URL e GEODB_REMOTE_TOKEN antes de
 # executar o instalador, e o passo [13/13] aponta o Hermes para o host deles
 # sem instalar nada localmente.
+#
+# GEODB_DEMO (perguntado no início) inclui a Bacia de Maltá, FICTÍCIA
+# (geodb/demo_malta.py). Nunca em produção.
 GEODB_DIR="$INSTALL_DIR/geodb"
 GEODB_PORT="${GEODB_PORT:-9000}"
 GEODB_SECRETS_DIR="$HOME/.hermes/.secrets"
@@ -314,7 +349,12 @@ else
     "$GEODB_DIR/.venv/bin/pip" install -q -r "$GEODB_DIR/requirements.txt"
 
     echo "-- Populando geo.db a partir das fontes..."
-    "$GEODB_DIR/.venv/bin/python" "$GEODB_DIR/seed.py" --db "$GEODB_DIR/geo.db"
+    GEODB_SEED_ARGS=()
+    if [ "$GEODB_DEMO" = "1" ]; then
+        echo "-- Incluindo a Bacia de Maltá (fictícia, demo)."
+        GEODB_SEED_ARGS+=(--demo)
+    fi
+    "$GEODB_DIR/.venv/bin/python" "$GEODB_DIR/seed.py" --db "$GEODB_DIR/geo.db" "${GEODB_SEED_ARGS[@]}"
     chmod 444 "$GEODB_DIR/geo.db"
 
     # Serviço systemd de usuário: sobe junto com a máquina e reinicia sozinho.
@@ -346,9 +386,12 @@ SERVICE
 
     # O script roda sob `set -e`: um systemctl que falha abortaria a instalação
     # inteira. Por isso cada chamada é tolerada e há queda para nohup.
+    # restart (e não só enable --now): numa reinstalação o serviço já está no ar
+    # com o código antigo, e precisa recarregar o código e a base recém-semeada.
     GEODB_VIA_SYSTEMD=0
     if systemctl --user daemon-reload 2>/dev/null \
-       && systemctl --user enable --now geodb.service 2>/dev/null; then
+       && systemctl --user enable geodb.service 2>/dev/null \
+       && systemctl --user restart geodb.service 2>/dev/null; then
         GEODB_VIA_SYSTEMD=1
         echo "-- GeoDB sob systemd (systemctl --user status geodb)"
     else
@@ -365,8 +408,10 @@ SERVICE
     fi
 
     echo "-- Aguardando a GeoDB responder..."
+    GEODB_NO_AR=0
     for i in $(seq 1 15); do
         if curl -fsS "http://127.0.0.1:$GEODB_PORT/health" >/dev/null 2>&1; then
+            GEODB_NO_AR=1
             echo "✅ GeoDB no ar: http://127.0.0.1:$GEODB_PORT  (docs em /docs)"
             curl -fsS "http://127.0.0.1:$GEODB_PORT/health"; echo
             break
@@ -374,6 +419,20 @@ SERVICE
         [ "$i" = "15" ] && echo "⚠  GeoDB não respondeu em 15s — veja: systemctl --user status geodb"
         sleep 1
     done
+
+    # Confere que a Maltá está sendo servida de fato, pela mesma rota que a
+    # ponte MCP usa, e não só que o seed rodou.
+    if [ "$GEODB_DEMO" = "1" ] && [ "$GEODB_NO_AR" = "1" ]; then
+        GEODB_MALTA="$(curl -fsS -H "X-API-Key: $(cat "$GEODB_TOKEN_FILE")" \
+            "http://127.0.0.1:$GEODB_PORT/v1/bacias/Malta" 2>/dev/null || true)"
+        if printf '%s' "$GEODB_MALTA" | python3 -c \
+            'import json,sys; b=json.load(sys.stdin); assert b["area_km2"]==4317.0; print("✅ Demo no ar:", b["nome"], "-", int(b["area_km2"]), "km2 (fictícia)")' \
+            2>/dev/null; then
+            :
+        else
+            echo "⚠  A GeoDB subiu, mas não devolveu a Bacia de Maltá. Veja: journalctl --user -u geodb"
+        fi
+    fi
 fi
 
 echo "=========================================="
@@ -516,3 +575,10 @@ echo "  http://127.0.0.1:$GEODB_PORT/docs          # API navegável no browser"
 echo "  systemctl --user status geodb              # estado do serviço"
 echo "  journalctl --user -u geodb -f              # logs"
 echo "  hermes -z \"Qual o COT dos folhelhos da Formação Ipubi?\"   # testa a ferramenta MCP"
+if [ "$GEODB_DEMO" = "1" ]; then
+    echo ""
+    echo "Demo Maltá (bacia FICTÍCIA, só existe na GeoDB):"
+    echo "  hermes -z \"Qual a área da Bacia de Maltá e o COT da Formação Lagoa Funda?\""
+    echo "  # esperado: 4.317 km2 e COT de 6,4 a 11,9 %. Sem a GeoDB o modelo não tem como saber."
+    echo "  # para tirar a demo: GEODB_DEMO=0 ./install_hermes_lightsail.sh"
+fi

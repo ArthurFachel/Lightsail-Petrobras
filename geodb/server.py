@@ -113,7 +113,9 @@ mcp = MCPServer(
 )
 
 
-@mcp.tool(annotations=LEITURA, description="Lista as bacias sedimentares disponiveis na base.")
+@mcp.tool(annotations=LEITURA, description=(
+    "Lista as bacias sedimentares disponiveis na base. Chame primeiro quando a pergunta "
+    "citar uma bacia, para saber se ela esta coberta."))
 def listar_bacias() -> list[dict[str, Any]]:
     return gdb.listar_bacias()
 
@@ -127,18 +129,21 @@ def descrever_bacia(nome: str) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=LEITURA, description=(
-    "Lista as formacoes de uma bacia em ordem estratigrafica, da base para o topo. "
-    "Filtre por grupo (ex.: 'Santana') ou por sequencia (ex.: 'Pos-Rifte I')."))
-def listar_formacoes(grupo: str | None = None, sequencia: str | None = None) -> list[dict[str, Any]]:
-    return gdb.listar_formacoes(grupo=grupo, sequencia=sequencia)
+    "Lista as formacoes em ordem estratigrafica, da base para o topo. Informe a bacia "
+    "(ex.: 'Araripe') para nao misturar bacias. Filtre tambem por grupo (ex.: 'Santana') "
+    "ou por sequencia (ex.: 'Pos-Rifte I')."))
+def listar_formacoes(grupo: str | None = None, sequencia: str | None = None,
+                     bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.listar_formacoes(grupo=grupo, sequencia=sequencia, bacia=bacia)
 
 
 @mcp.tool(annotations=LEITURA, description=(
     "Ficha completa de uma formacao geologica: idade, litologia, espessura, "
     "ambiente deposicional, geoquimica e conteudo fossilifero. Aceita o nome com "
-    "ou sem o prefixo 'Formacao'."))
-def descrever_formacao(nome: str) -> dict[str, Any]:
-    r = gdb.descrever_formacao(nome)
+    "ou sem o prefixo 'Formacao'. Se o nome existir em mais de uma bacia, a resposta "
+    "pede a bacia; informe-a no parametro bacia."))
+def descrever_formacao(nome: str, bacia: str | None = None) -> dict[str, Any]:
+    r = gdb.descrever_formacao(nome, bacia=bacia)
     return r or {"encontrado": False, "mensagem": f"Nenhuma formacao chamada '{nome}' na base."}
 
 
@@ -146,19 +151,19 @@ def descrever_formacao(nome: str) -> dict[str, Any]:
     "Dados de geoquimica organica de uma formacao: faixa de COT, tipo de "
     "querogenio, maturidade termica e metodo analitico. Use sempre que a pergunta "
     "envolver COT, querogenio, rocha geradora ou potencial de geracao."))
-def geoquimica_formacao(nome: str) -> list[dict[str, Any]]:
-    return gdb.geoquimica_formacao(nome)
+def geoquimica_formacao(nome: str, bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.geoquimica_formacao(nome, bacia=bacia)
 
 
 @mcp.tool(annotations=LEITURA, description="Conteudo fossilifero registrado para uma formacao.")
-def fosseis_formacao(nome: str) -> list[dict[str, Any]]:
-    return gdb.fosseis_formacao(nome)
+def fosseis_formacao(nome: str, bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.fosseis_formacao(nome, bacia=bacia)
 
 
 @mcp.tool(annotations=LEITURA, description=(
     "Em quais formacoes ocorre um grupo fossil (ex.: 'pterossauros', 'ostracodes')."))
-def buscar_fossil(grupo_biologico: str) -> list[dict[str, Any]]:
-    return gdb.buscar_fossil(grupo_biologico)
+def buscar_fossil(grupo_biologico: str, bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.buscar_fossil(grupo_biologico, bacia=bacia)
 
 
 @mcp.tool(annotations=LEITURA, description=(
@@ -172,8 +177,8 @@ def buscar_poco(nome: str) -> dict[str, Any]:
     "Divergencias conhecidas da literatura sobre um tema (ex.: 'ingressao marinha', "
     "'sequencias estratigraficas'). Devolve SEMPRE as duas posicoes com suas fontes. "
     "Chame esta ferramenta antes de afirmar algo como consenso."))
-def controversias(tema: str | None = None) -> list[dict[str, Any]]:
-    return gdb.controversias(tema)
+def controversias(tema: str | None = None, bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.controversias(tema, bacia=bacia)
 
 
 @mcp.tool(annotations=LEITURA, description=(
@@ -186,8 +191,8 @@ def versao_base() -> dict[str, Any]:
 @mcp.tool(annotations=LEITURA, description=(
     "Busca textual livre nas descricoes das formacoes quando voce nao sabe o nome "
     "exato. Ex.: 'evaporitos gipsita', 'calcario laminado'."))
-def busca_livre(termo: str, limite: int = 10) -> list[dict[str, Any]]:
-    return gdb.busca_livre(termo, limite=min(max(limite, 1), 50))
+def busca_livre(termo: str, limite: int = 10, bacia: str | None = None) -> list[dict[str, Any]]:
+    return gdb.busca_livre(termo, limite=min(max(limite, 1), 50), bacia=bacia)
 
 
 # ── App HTTP ─────────────────────────────────────────────────────────────────
@@ -236,37 +241,40 @@ def r_bacia(nome: str) -> dict[str, Any]:
 
 @app.get(V1 + "/formacoes", dependencies=protegido, summary="Lista formacoes")
 def r_formacoes(
-    grupo: str | None = Query(None), sequencia: str | None = Query(None)
+    grupo: str | None = Query(None), sequencia: str | None = Query(None),
+    bacia: str | None = Query(None),
 ) -> list[dict[str, Any]]:
-    return gdb.listar_formacoes(grupo=grupo, sequencia=sequencia)
+    return gdb.listar_formacoes(grupo=grupo, sequencia=sequencia, bacia=bacia)
 
 
 @app.get(V1 + "/formacoes/{nome}", dependencies=protegido, summary="Ficha da formacao")
-def r_formacao(nome: str) -> dict[str, Any]:
-    r = gdb.descrever_formacao(nome)
+def r_formacao(nome: str, bacia: str | None = Query(None)) -> dict[str, Any]:
+    r = gdb.descrever_formacao(nome, bacia=bacia)
     if not r:
         raise HTTPException(404, f"formacao '{nome}' nao encontrada")
     return r
 
 
 @app.get(V1 + "/formacoes/{nome}/geoquimica", dependencies=protegido, summary="Geoquimica organica")
-def r_geoquimica(nome: str) -> list[dict[str, Any]]:
-    return gdb.geoquimica_formacao(nome)
+def r_geoquimica(nome: str, bacia: str | None = Query(None)) -> list[dict[str, Any]]:
+    return gdb.geoquimica_formacao(nome, bacia=bacia)
 
 
 @app.get(V1 + "/formacoes/{nome}/fosseis", dependencies=protegido, summary="Conteudo fossilifero")
-def r_fosseis(nome: str) -> list[dict[str, Any]]:
-    return gdb.fosseis_formacao(nome)
+def r_fosseis(nome: str, bacia: str | None = Query(None)) -> list[dict[str, Any]]:
+    return gdb.fosseis_formacao(nome, bacia=bacia)
 
 
 @app.get(V1 + "/fosseis", dependencies=protegido, summary="Formacoes que contem um grupo fossil")
-def r_busca_fossil(grupo_biologico: str = Query(...)) -> list[dict[str, Any]]:
-    return gdb.buscar_fossil(grupo_biologico)
+def r_busca_fossil(
+    grupo_biologico: str = Query(...), bacia: str | None = Query(None)
+) -> list[dict[str, Any]]:
+    return gdb.buscar_fossil(grupo_biologico, bacia=bacia)
 
 
 @app.get(V1 + "/pocos", dependencies=protegido, summary="Lista pocos")
-def r_pocos() -> list[dict[str, Any]]:
-    return gdb.listar_pocos()
+def r_pocos(bacia: str | None = Query(None)) -> list[dict[str, Any]]:
+    return gdb.listar_pocos(bacia=bacia)
 
 
 @app.get(V1 + "/pocos/{nome}", dependencies=protegido, summary="Ficha do poco")
@@ -278,8 +286,10 @@ def r_poco(nome: str) -> dict[str, Any]:
 
 
 @app.get(V1 + "/controversias", dependencies=protegido, summary="Divergencias na literatura")
-def r_controversias(tema: str | None = Query(None)) -> list[dict[str, Any]]:
-    return gdb.controversias(tema)
+def r_controversias(
+    tema: str | None = Query(None), bacia: str | None = Query(None)
+) -> list[dict[str, Any]]:
+    return gdb.controversias(tema, bacia=bacia)
 
 
 @app.get(V1 + "/versao", dependencies=protegido, summary="Identidade e tamanho da carga")
@@ -288,8 +298,11 @@ def r_versao() -> dict[str, Any]:
 
 
 @app.get(V1 + "/busca", dependencies=protegido, summary="Busca textual nas formacoes")
-def r_busca(termo: str = Query(...), limite: int = Query(10, ge=1, le=50)) -> list[dict[str, Any]]:
-    return gdb.busca_livre(termo, limite=limite)
+def r_busca(
+    termo: str = Query(...), limite: int = Query(10, ge=1, le=50),
+    bacia: str | None = Query(None),
+) -> list[dict[str, Any]]:
+    return gdb.busca_livre(termo, limite=limite, bacia=bacia)
 
 
 app.mount("/mcp", mcp_app)

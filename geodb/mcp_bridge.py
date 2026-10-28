@@ -67,7 +67,9 @@ def _buscar(caminho: str, params: dict[str, Any] | None = None) -> Any:
     return r.json()
 
 
-@mcp.tool(annotations=LEITURA, description="Lista as bacias sedimentares disponiveis na base.")
+@mcp.tool(annotations=LEITURA, description=(
+    "Lista as bacias sedimentares disponiveis na base. Chame primeiro quando a pergunta "
+    "citar uma bacia, para saber se ela esta coberta."))
 def listar_bacias() -> Any:
     return _buscar("/v1/bacias")
 
@@ -80,35 +82,39 @@ def descrever_bacia(nome: str) -> Any:
 
 
 @mcp.tool(annotations=LEITURA, description=(
-    "Lista as formacoes em ordem estratigrafica, da base para o topo. Filtre por grupo "
-    "(ex.: 'Santana') ou por sequencia (ex.: 'Pos-Rifte I')."))
-def listar_formacoes(grupo: str | None = None, sequencia: str | None = None) -> Any:
-    return _buscar("/v1/formacoes", {"grupo": grupo, "sequencia": sequencia})
+    "Lista as formacoes em ordem estratigrafica, da base para o topo. Informe a bacia "
+    "(ex.: 'Araripe') para nao misturar bacias. Filtre tambem por grupo (ex.: 'Santana') "
+    "ou por sequencia (ex.: 'Pos-Rifte I')."))
+def listar_formacoes(grupo: str | None = None, sequencia: str | None = None,
+                     bacia: str | None = None) -> Any:
+    return _buscar("/v1/formacoes", {"grupo": grupo, "sequencia": sequencia, "bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description=(
     "Ficha completa de uma formacao: idade, litologia, espessura, ambiente deposicional, "
-    "geoquimica e conteudo fossilifero. Aceita o nome com ou sem o prefixo 'Formacao'."))
-def descrever_formacao(nome: str) -> Any:
-    return _buscar(f"/v1/formacoes/{nome}")
+    "geoquimica e conteudo fossilifero. Aceita o nome com ou sem o prefixo 'Formacao'. "
+    "Se o nome existir em mais de uma bacia, a resposta pede a bacia; informe-a no "
+    "parametro bacia."))
+def descrever_formacao(nome: str, bacia: str | None = None) -> Any:
+    return _buscar(f"/v1/formacoes/{nome}", {"bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description=(
     "Geoquimica organica de uma formacao: faixa de COT, tipo de querogenio, maturidade "
     "termica e metodo analitico. Use sempre que a pergunta envolver COT, querogenio, "
     "rocha geradora ou potencial de geracao."))
-def geoquimica_formacao(nome: str) -> Any:
-    return _buscar(f"/v1/formacoes/{nome}/geoquimica")
+def geoquimica_formacao(nome: str, bacia: str | None = None) -> Any:
+    return _buscar(f"/v1/formacoes/{nome}/geoquimica", {"bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description="Conteudo fossilifero registrado para uma formacao.")
-def fosseis_formacao(nome: str) -> Any:
-    return _buscar(f"/v1/formacoes/{nome}/fosseis")
+def fosseis_formacao(nome: str, bacia: str | None = None) -> Any:
+    return _buscar(f"/v1/formacoes/{nome}/fosseis", {"bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description="Em quais formacoes ocorre um grupo fossil (ex.: 'pterossauros').")
-def buscar_fossil(grupo_biologico: str) -> Any:
-    return _buscar("/v1/fosseis", {"grupo_biologico": grupo_biologico})
+def buscar_fossil(grupo_biologico: str, bacia: str | None = None) -> Any:
+    return _buscar("/v1/fosseis", {"grupo_biologico": grupo_biologico, "bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description="Dados de um poco exploratorio: sub-bacia e profundidade do embasamento.")
@@ -119,8 +125,8 @@ def buscar_poco(nome: str) -> Any:
 @mcp.tool(annotations=LEITURA, description=(
     "Divergencias conhecidas da literatura sobre um tema (ex.: 'ingressao marinha'). "
     "Devolve SEMPRE as duas posicoes com suas fontes. Chame antes de afirmar consenso."))
-def controversias(tema: str | None = None) -> Any:
-    return _buscar("/v1/controversias", {"tema": tema})
+def controversias(tema: str | None = None, bacia: str | None = None) -> Any:
+    return _buscar("/v1/controversias", {"tema": tema, "bacia": bacia})
 
 
 @mcp.tool(annotations=LEITURA, description=(
@@ -133,8 +139,8 @@ def versao_base() -> Any:
 @mcp.tool(annotations=LEITURA, description=(
     "Busca textual livre nas descricoes das formacoes quando voce nao sabe o nome exato. "
     "Ex.: 'evaporitos gipsita', 'calcario laminado'."))
-def busca_livre(termo: str, limite: int = 10) -> Any:
-    return _buscar("/v1/busca", {"termo": termo, "limite": max(1, min(limite, 50))})
+def busca_livre(termo: str, limite: int = 10, bacia: str | None = None) -> Any:
+    return _buscar("/v1/busca", {"termo": termo, "limite": max(1, min(limite, 50)), "bacia": bacia})
 
 
 if __name__ == "__main__":
